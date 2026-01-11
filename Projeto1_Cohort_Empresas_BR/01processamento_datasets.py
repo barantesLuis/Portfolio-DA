@@ -1,40 +1,66 @@
-import os
-import pandas as pd
-from tqdm import tqdm
-
-# ==============================
-# CONFIGURAÇÕES
-# ==============================
-# Ajuste o caminho se necessário, mas parece correto baseado no seu print
+# =====================================================
+# CONFIGURAÇÕES DE DIRETÓRIO
+# =====================================================
 BASE_DIR = r"C:\Git\Repositórios\Portfolio-DA\Projeto1_Cohort_Empresas_BR\dados_projeto_1"
 EXTRACT_DIR = os.path.join(BASE_DIR, "extracted")
 
-# ==============================
-# FUNÇÃO DE LEITURA
-# ==============================
-def ler_dados(tipo):
-    # Dicionário robusto: chaves no singular para facilitar
-    TIPOS_ARQUIVOS = {
-        "empresa": "EMPRECSV",
-        "estabelecimento": "ESTABELE",
-        "socio": "SOCIOCSV",
-        "cnae": "CNAECSV",
-        "natureza": "NATJUCSV",
-        "municipio": "MUNICCSV"
-    }
+# =====================================================
+# MAPEAMENTO DOS TIPOS DE ARQUIVO
+# =====================================================
+TIPOS_ARQUIVOS = {
+    "empresa": "EMPRECSV",
+    "estabelecimento": "ESTABELE",
+    "socio": "SOCIOCSV",
+    "cnae": "CNAECSV",
+    "natureza": "NATJUCSV",
+    "municipio": "MUNICCSV"
+}
 
-    # Lógica inteligente: converte para minúsculo e remove o 's' final se houver
-    # Assim funciona tanto "EMPRESA" quanto "empresas"
-    chave_busca = tipo.lower().rstrip('s')
-    
-    prefixo = TIPOS_ARQUIVOS.get(chave_busca)
+# =====================================================
+# LAYOUTS (COLUNAS) - RECEITA FEDERAL
+# =====================================================
+LAYOUTS = {
+    "empresa": [
+        "cnpj_basico", "razao_social", "natureza_juridica",
+        "qualificacao_responsavel", "capital_social",
+        "porte_empresa", "ente_federativo"
+    ],
+    "estabelecimento": [
+        "cnpj_basico", "cnpj_ordem", "cnpj_dv", "matriz_filial",
+        "nome_fantasia", "situacao_cadastral", "data_situacao",
+        "motivo_situacao", "nome_cidade_exterior", "pais",
+        "data_inicio_atividade", "cnae_principal",
+        "cnae_secundarios", "tipo_logradouro", "logradouro",
+        "numero", "complemento", "bairro", "cep",
+        "uf", "municipio", "ddd1", "telefone1",
+        "ddd2", "telefone2", "ddd_fax", "fax",
+        "email", "situacao_especial", "data_situacao_especial"
+    ],
+    "socio": [
+        "cnpj_basico", "tipo_socio", "nome_socio",
+        "cpf_cnpj_socio", "qualificacao_socio",
+        "data_entrada", "pais",
+        "cpf_representante", "nome_representante",
+        "qualificacao_representante", "faixa_etaria"
+    ],
+    "cnae": ["codigo_cnae", "descricao_cnae"],
+    "natureza": ["codigo_natureza", "descricao_natureza"],
+    "municipio": ["codigo_municipio", "nome_municipio"]
+}
 
-    if not prefixo:
-        raise ValueError(f"Tipo inválido: {tipo} (Tente usar: empresa, socio, estabelecimento...)")
+# =====================================================
+# FUNÇÃO DE LEITURA DOS CSVs
+# =====================================================
+def ler_dados(tipo: str) -> pd.DataFrame:
+    chave = tipo.lower().rstrip("s")
 
-    # Verifica se a pasta existe antes de listar
+    if chave not in TIPOS_ARQUIVOS:
+        raise ValueError(f"Tipo inválido: {tipo}")
+
+    prefixo = TIPOS_ARQUIVOS[chave]
+
     if not os.path.exists(EXTRACT_DIR):
-        raise FileNotFoundError(f"A pasta não foi encontrada: {EXTRACT_DIR}")
+        raise FileNotFoundError(f"Pasta não encontrada: {EXTRACT_DIR}")
 
     arquivos = [
         os.path.join(EXTRACT_DIR, f)
@@ -43,66 +69,70 @@ def ler_dados(tipo):
     ]
 
     if not arquivos:
-        raise ValueError(f"Nenhum arquivo com '{prefixo}' encontrado na pasta.")
+        raise FileNotFoundError(f"Nenhum arquivo encontrado para {tipo}")
 
     dfs = []
-    for arquivo in tqdm(arquivos, desc=f"📊 Lendo {tipo}"):
+
+    for arquivo in tqdm(arquivos, desc=f"📥 Lendo {tipo.upper()}"):
         try:
             df = pd.read_csv(
                 arquivo,
                 sep=";",
                 encoding="latin1",
-                low_memory=False,
-                header=None, # IMPORTANTE: Arquivos da Receita NÃO têm cabeçalho
-                dtype=str    # IMPORTANTE: Lê tudo como texto para evitar erros
+                header=None,
+                dtype=str,
+                low_memory=False
             )
             dfs.append(df)
         except Exception as e:
-            print(f"Erro ao ler {os.path.basename(arquivo)}: {e}")
-
-    if not dfs:
-        return pd.DataFrame()
+            print(f"❌ Erro ao ler {arquivo}: {e}")
 
     return pd.concat(dfs, ignore_index=True)
 
-# ==============================
-# EXECUÇÃO
-# ==============================
+# =====================================================
+# EXECUÇÃO PRINCIPAL
+# =====================================================
 if __name__ == "__main__":
-    # Definição dos nomes das colunas (Layout Receita Federal - EMPRESA)
-    COLUNAS_EMPRESAS = [
-        "cnpj_basico", "razao_social", "natureza_juridica", 
-        "qualificacao_responsavel", "capital_social", "porte_empresa", "ente_federativo"
-    ]
+    print("\n🚀 INICIANDO PIPELINE DE DADOS\n")
 
-    try:
-        print("--- Iniciando Processamento ---")
-        # Agora vai aceitar "EMPRESA" sem dar erro
-        df_empresas = ler_dados("EMPRESA")
-        
-        # Renomeia as colunas
-        if not df_empresas.empty:
-            df_empresas.columns = COLUNAS_EMPRESAS
-            print("\n✅ Sucesso! Primeiras 5 linhas:")
-            print(df_empresas.head())
-            print(f"\nTotal de registros carregados: {len(df_empresas):,}")
-        else:
-            print("Nenhum dado foi carregado.")
-            
-    except Exception as e:
-        print(f"\n❌ Ocorreu um erro: {e}")
-        
+    dfs = {}
 
-print(len(df_empresas.columns))
-print(f"No total são: {len(df_empresas.columns)}, colunas")
-print(f"E as colunas são: {df_empresas.columns}")
+    for tipo in TIPOS_ARQUIVOS.keys():
+        try:
+            print(f"\n🔄 Processando {tipo.upper()}")
 
-# ==============================
-# ARMAZENAMENTO EM PARQUET
-# ==============================
+            df = ler_dados(tipo)
 
-caminho_parquet = os.path.join(BASE_DIR, "empresas_tratado.parquet")
+            if df.empty:
+                print(f"⚠️ Nenhum dado para {tipo}")
+                continue
 
-print("💾 Salvando em Parquet...")
-df_empresas.to_parquet(caminho_parquet, index=False, compression='snappy')
-print(f"✅ Arquivo salvo com sucesso em: {caminho_parquet}")
+            if len(df.columns) == len(LAYOUTS[tipo]):
+                df.columns = LAYOUTS[tipo]
+            else:
+                print(
+                    f"⚠️ Layout não aplicado em {tipo} | "
+                    f"Esperado: {len(LAYOUTS[tipo])} | "
+                    f"Encontrado: {len(df.columns)}"
+                )
+
+            dfs[tipo] = df
+
+            print(f"✅ {tipo}: {len(df):,} registros carregados")
+
+        except Exception as e:
+            print(f"❌ Erro no processamento de {tipo}: {e}")
+
+    # =================================================
+    # SALVAMENTO EM PARQUET
+    # =================================================
+    print("\n💾 SALVANDO ARQUIVOS PARQUET\n")
+
+    for tipo, df in dfs.items():
+        caminho = os.path.join(BASE_DIR, f"{tipo}_tratado.parquet")
+        df.to_parquet(caminho, index=False, compression="snappy")
+        print(f"✅ {tipo} salvo em: {caminho}")
+
+    print("\n🏁 PIPELINE FINALIZADO COM SUCESSO\n")
+    
+    
